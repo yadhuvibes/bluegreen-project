@@ -4,7 +4,7 @@ from flask import Flask
 app = Flask(__name__)
 
 @app.route("/")
-def home()
+def home():
     return f" just Blue-Green App Running - {os.getenv('ENV', 'BLUE')}"
 
 if __name__ == "__main__":
