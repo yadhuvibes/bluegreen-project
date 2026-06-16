@@ -3,8 +3,13 @@ pipeline {
 
     environment {
         IMAGE = "bluegreen-app"
-        CONTAINER_GREEN = "green"
-        APP_PORT = "5000"
+
+        // AWS ARNs (REPLACE ONLY IF YOURS CHANGE)
+        LISTENER_ARN = "arn:aws:elasticloadbalancing:ap-south-1:652253417155:listener/app/bluegreen-alb/32c8178b06f72be7/9b0831bfef736580"
+
+        TG_GREEN = "arn:aws:elasticloadbalancing:ap-south-1:652253417155:targetgroup/tg-green/2d845c57aff6e61a"
+
+        TG_BLUE = "arn:aws:elasticloadbalancing:ap-south-1:652253417155:targetgroup/tg-blue/1f37706423e0c648"
     }
 
     stages {
@@ -34,7 +39,7 @@ pipeline {
             steps {
                 sh '''
                 sleep 10
-                curl http://localhost:5002
+                curl --retry 5 --retry-delay 3 http://localhost:5002
                 '''
             }
         }
@@ -43,8 +48,8 @@ pipeline {
             steps {
                 sh '''
                 aws elbv2 modify-listener \
-                --listener-arn arn:aws:elasticloadbalancing:ap-south-1:652253417155:loadbalancer/app/bluegreen-alb/32c8178b06f72be7 \
-                --default-actions Type=forward,TargetGroupArn=arn:aws:elasticloadbalancing:ap-south-1:652253417155:targetgroup/tg-green/2d845c57aff6e61a
+                --listener-arn $LISTENER_ARN \
+                --default-actions Type=forward,TargetGroupArn=$TG_GREEN
                 '''
             }
         }
@@ -52,15 +57,17 @@ pipeline {
 
     post {
         failure {
-            sh '''
-            echo "Rollback triggered"
-            docker rm -f green || true
+            steps {
+                sh '''
+                echo "Rollback triggered"
 
-            aws elbv2 modify-listener \
-            --listener-arn YOUR_LISTENER_ARN \
-            --default-actions Type=forward,TargetGroupArn=arn:aws:elasticloadbalancing:ap-south-1:652253417155:targetgroup/tg-blue/1f37706423e0c648
-            '''
+                docker rm -f green || true
+
+                aws elbv2 modify-listener \
+                --listener-arn $LISTENER_ARN \
+                --default-actions Type=forward,TargetGroupArn=$TG_BLUE
+                '''
+            }
         }
     }
 }
-
